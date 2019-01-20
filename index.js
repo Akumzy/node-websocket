@@ -54,7 +54,8 @@ class Socket extends EventEmitter {
             if (ready) return clearInterval(inter);
             try {
                 let url = this.url
-                if (this.url.statesWith('ws:')) url.replace('ws:', 'http:')
+
+                if (this.url.startsWith('ws:')) url.replace('ws:', 'http:')
                 HTTPGET(`${url}:${this.port}`, res => {
                     if (res.statusCode === 200) {
                         ready = true;
