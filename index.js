@@ -55,7 +55,7 @@ class Socket extends EventEmitter {
             try {
                 let url = this.url
 
-                if (this.url.startsWith('ws:')) url.replace('ws:', 'http:')
+                if (this.url.startsWith('ws:')) url = url.replace('ws:', 'http:')
                 HTTPGET(`${url}:${this.port}`, res => {
                     if (res.statusCode === 200) {
                         ready = true;
