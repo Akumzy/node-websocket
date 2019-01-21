@@ -1,18 +1,19 @@
-const EventEmitter = require('events').EventEmitter
-const WebSocket = require('ws')
-const HTTPGET = require('http').get
+const EventEmitter = require("events").EventEmitter;
+const WebSocket = require("ws");
+const HTTPGET = require("http").get;
+const URL = require("url");
 class Socket extends EventEmitter {
-    constructor({ port, url }) {
+    constructor(url) {
         super();
         this.socket = null;
-        this.url = url
-        this.port = port;
+        this.url = url;
         this.destroyed = false;
         this.connected = false;
+        this.pingTimer = null
         this._connectOrReconnect();
     }
     connect() {
-        const ws = new WebSocket(`${this.url}:${this.port}`);
+        const ws = new WebSocket(this.url);
         ws.on("open", () => {
             this.socket = ws;
             this.emit("connect");
@@ -28,12 +29,22 @@ class Socket extends EventEmitter {
             let d = JSON.parse(data);
             this.emit(d.type, d.data);
         });
+        this.pingTimer = setInterval(() => {
+            ws.ping('hello')
+        }, 10000)
+
     }
     send(type, data, cb) {
         if (this.destroyed) return;
+        // If the data argument is either object or array
+        // turn it into json to avoid `Golang` from converting
+        // it into map
+        if (typeof data === "object" || Array.isArray(data)) {
+            data = JSON.stringify(data);
+        }
         data = JSON.stringify({
             type,
-            data: JSON.stringify(data)
+            data
         });
         if (this.connected) {
             this.socket.send(data, cb);
@@ -53,14 +64,15 @@ class Socket extends EventEmitter {
         let inter = setInterval(() => {
             if (ready) return clearInterval(inter);
             try {
-                let url = this.url
-
-                if (this.url.startsWith('ws:')) url = url.replace('ws:', 'http:')
-                HTTPGET(`${url}:${this.port}`, res => {
+                let url = this.url;
+                if (this.url.startsWith("ws://")) {
+                    let u = URL.parse(url);
+                    url = `http://${u.hostname}:${u.port}`;
+                }
+                HTTPGET(url, res => {
                     if (res.statusCode === 200) {
                         ready = true;
                         self.connect();
-                        r
                         clearInterval(inter);
                     }
                     res.on("error", err => {
@@ -74,8 +86,9 @@ class Socket extends EventEmitter {
     }
     destroy() {
         this.destroyed = true;
-        this.eventNames().forEach(e => this.removeAllListeners(e, () => {}))
+        if (this.pingTimer) clearInterval(this.pingTimer)
+        this.eventNames().forEach(e => this.removeAllListeners(e, () => {}));
         if (this.socket) this.socket.close();
     }
 }
-module.exports = Socket
+module.exports = Socket;
