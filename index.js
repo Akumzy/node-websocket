@@ -13,6 +13,9 @@ class Socket extends EventEmitter {
         this._connectOrReconnect();
     }
     connect() {
+        this._connectOrReconnect();
+    }
+    _connect() {
         const ws = new WebSocket(this.url);
         ws.on("open", () => {
             this.socket = ws;
@@ -29,6 +32,7 @@ class Socket extends EventEmitter {
             let d = JSON.parse(data);
             this.emit(d.type, d.data);
         });
+
         this.pingTimer = setInterval(() => {
             ws.ping('hello')
         }, 10000)
@@ -63,25 +67,23 @@ class Socket extends EventEmitter {
         let ready;
         let inter = setInterval(() => {
             if (ready) return clearInterval(inter);
-            try {
-                let url = this.url;
-                if (this.url.startsWith("ws://")) {
-                    let u = URL.parse(url);
-                    url = `http://${u.hostname}:${u.port}`;
-                }
-                HTTPGET(url, res => {
-                    if (res.statusCode === 200) {
-                        ready = true;
-                        self.connect();
-                        clearInterval(inter);
-                    }
-                    res.on("error", err => {
-                        console.log(err);
-                    });
-                });
-            } catch (error) {
-                console.log(error);
+
+            let url = this.url;
+            if (this.url.startsWith("ws://")) {
+                let u = URL.parse(url);
+                url = `http://${u.hostname}:${u.port}`;
             }
+            let d = HTTPGET(url, res => {
+                if (res.statusCode === 200) {
+                    ready = true;
+                    self.connect();
+                    clearInterval(inter);
+                }
+            });
+            d.on('error', (err) => {
+                self.emit('error', err)
+            })
+
         }, 1000);
     }
     destroy() {
