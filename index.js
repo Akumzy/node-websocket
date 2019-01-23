@@ -25,13 +25,18 @@ class Socket extends EventEmitter {
       this.emit("error", err);
       this._connectOrReconnect();
     });
+    ws.on("close", () => {
+      this.connected = false;
+    });
     ws.on("message", data => {
       let d = JSON.parse(data);
       this.emit(d.type, d.data, d.error);
     });
 
     this.pingTimer = setInterval(() => {
-      ws.ping("hello");
+      if (this.connected) {
+        ws.ping("hello");
+      }
     }, 10000);
   }
   send(type, data, cb) {
@@ -42,10 +47,15 @@ class Socket extends EventEmitter {
     if (typeof data === "object" || Array.isArray(data)) {
       data = JSON.stringify(data);
     }
-
+    let SD = false;
+    if (typeof type === "object") {
+      type = type.type;
+      SD = true;
+    }
     data = JSON.stringify({
       type,
-      data: data || null
+      data: data || null,
+      SD
     });
     if (this.connected) {
       this.socket.send(data, cb);
@@ -56,17 +66,22 @@ class Socket extends EventEmitter {
           this.socket.send(data, cb);
           clearInterval(inter);
         }
-      });
+      }, 3000);
     }
   }
   sendAndReceive(type, data, cb) {
     return new Promise((res, rej) => {
       let r = type + "__receive__";
-      this.once(r, (d, err) => {
+      this.on(r, (d, error) => {
+        console.log(type);
         if (typeof cb === "function") cb(err, d);
-        else res(err, d);
+        else
+          res({
+            error,
+            data: d
+          });
       });
-      this.send(type, data, err => {
+      this.send({ type, SD: true }, data, err => {
         if (err) {
           if (typeof cb === "function") cb(err);
           else rej(err);
